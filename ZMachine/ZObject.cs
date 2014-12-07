@@ -115,13 +115,13 @@ namespace ZMachine
 
         public void Insert(ZObject obj)
         {
+            var oldParent = obj.GetParent();
+            if (oldParent == this) return;
+
             obj.SetParent(this);
-            var child = GetChild();
-            if (child != null)
-                obj.SetSibling(GetChild());
+            obj.SetSibling(GetChild());
 
             SetChild(obj);
-
         }
 
 
@@ -132,7 +132,14 @@ namespace ZMachine
 
         public void SetParent(ZObject obj)
         {
-            table.Machine.WriteByte(address+4, obj.Id);
+            var oldParent = GetParent();
+            if (oldParent != null)
+            {
+                oldParent.SetChild(GetSibling());
+            }
+
+            var id = obj == null ? 0 : obj.Id;
+            table.Machine.WriteByte(address+4, (byte)id);
         }
 
         public ZObject GetSibling()
@@ -142,7 +149,8 @@ namespace ZMachine
 
         public void SetSibling(ZObject obj)
         {
-            table.Machine.WriteByte(address+5, obj.Id);
+            var id = obj == null ? 0 : obj.Id;
+            table.Machine.WriteByte(address+5, (byte)id);
         }
 
         public ZObject GetChild()
@@ -152,7 +160,8 @@ namespace ZMachine
 
         public void SetChild(ZObject obj)
         {
-            table.Machine.WriteByte(address+6, obj.Id);
+            var id = obj == null ? 0 : obj.Id;
+            table.Machine.WriteByte(address+6, (byte)id);
         }
 
 
