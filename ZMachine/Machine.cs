@@ -12,6 +12,7 @@ namespace ZMachine
     partial class Machine
     {
         public byte Version { get; private set; }
+        public bool IsDone { get; private set; }
 
         enum OperandType : byte
         {

@@ -510,6 +510,12 @@ namespace ZMachine
             
         }
 
+        [Operation("quit", OperationType.Zero, 0x0A)]
+        void Quit()
+        {
+            IsDone = true;
+        }
+
         [Operation("new_line", OperationType.Zero, 0x0B)]
         void NewLine()
         {
