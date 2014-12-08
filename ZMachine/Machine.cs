@@ -391,7 +391,7 @@ namespace ZMachine
                     else
                     {
                         result.Append(GetAbbreviation((uint)(32*(abbr - 1) + chr)));
-                        alphabet = 0;
+//                        alphabet = 0;
                         abbr = 0;
                     }
 
@@ -555,6 +555,52 @@ namespace ZMachine
         {
             var num = form == 2 ? BitUtil.MultiBitValue(opcode, 0, 4) : BitUtil.MultiBitValue(opcode, 0, 5);
             WriteDebugLine("[{0:X}] {1:X}", pc, num);
+        }
+
+        public void WriteStatusLine()
+        {
+            var obj = objectTable.GetObject(ReadWord(startGlobals));
+            var score = ReadWord((uint)(startGlobals + 2));
+            var moves = ReadWord((uint)(startGlobals + 4));
+//            if ((flags1 & 0x02) == 0x02)
+//            {
+//                Console.Title = string.Format("{0} {1}:{2}", obj.GetName(), score, moves);
+//            }
+//            else
+//            {
+//                Console.Title = string.Format("{0} {1}/{2}", obj.GetName(), score, moves);
+//            }
+            var c = Console.ForegroundColor;
+            var b = Console.BackgroundColor;
+            Console.ForegroundColor = ConsoleColor.Black;
+            Console.BackgroundColor = ConsoleColor.DarkGray;
+            var cursorTop = Console.CursorTop;
+            var cursorLeft = Console.CursorLeft;
+            //Console.SetCursorPosition(0, cursorTop-1);
+//            Console.SetCursorPosition(0, Math.Max(0, cursorTop-Console.WindowHeight));
+            Console.SetCursorPosition(0,0);
+            Console.Write(" " + obj.GetName());
+
+            string scoreDisplay;
+            if ((flags1 & 0x02) == 0x02)
+            {
+                scoreDisplay = string.Format("Time: {0}:{1} ", score, moves); 
+            }
+            else
+            {
+                scoreDisplay = string.Format("Score: {0}    Moves: {1} ", score, moves); 
+            }
+
+            for (var i = Console.CursorLeft; i < Console.WindowWidth - scoreDisplay.Length; i++)
+            {
+                Console.Write(' ');
+            }
+            Console.WriteLine(scoreDisplay);
+
+            Console.SetCursorPosition(cursorLeft, cursorTop);
+
+            Console.ForegroundColor = c;
+            Console.BackgroundColor = b;
         }
 
         public void WriteDebugLine(string format, params object[] arg)

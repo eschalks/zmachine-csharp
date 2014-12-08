@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace ZMachine
@@ -156,6 +157,28 @@ namespace ZMachine
             Store(addr);
         }
 
+        [Operation("get_next_prop", OperationType.Two, 0x13)]
+        void GetNextProperty(ushort[] args)
+        {
+            var obj = objectTable.GetObject(args[0]);
+            var props = obj.GetPropertyNumbers();
+            if (args[1] == 0)
+            {
+                Store(props[0]);
+                return;
+            }
+
+            var idx = props.IndexOf(args[1]);
+            if (idx == -1)
+                throw new InvalidOperationException("get_next_prop with non-existant property");
+            if (idx == props.Count - 1)
+            {
+                Store(0);
+                return;
+            }
+            Store(props[idx+1]);
+        }
+
         [Operation("add", OperationType.Two, 0x14)]
         void Add(ushort[] args)
         {
@@ -303,9 +326,7 @@ namespace ZMachine
         void PrintPackedAddress(ushort addr)
         {
             var paddr = GetPackedAddress(addr);
-
-            if (paddr < startHighMemory)
-                WriteDebugLine("WARNING: Packed address does not point to high memory.");
+            var c = Console.ForegroundColor;
             Console.Write(ReadString(paddr));
         }
 
@@ -331,7 +352,7 @@ namespace ZMachine
         [Operation("print_ret", OperationType.Zero, 0x03)]
         void PrintReturn()
         {
-            Console.Write(ReadString());
+            Console.WriteLine(ReadString());
             Return(1);
         }
 
@@ -556,6 +577,7 @@ namespace ZMachine
         [Operation("read", OperationType.Var, 0x04)]
         void Read(ushort[] args)
         {
+            WriteStatusLine();
             var startColor = Console.ForegroundColor;
             Console.ForegroundColor = ConsoleColor.DarkGray;
             var input = Console.ReadLine() ?? "";

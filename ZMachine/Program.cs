@@ -10,6 +10,8 @@ namespace ZMachine
     {
         static void Main(string[] args)
         {
+            Console.BufferHeight = Console.WindowHeight;
+            Console.WriteLine();
             var machine = Machine.LoadFromFile(args[0]);
             while (true)
             {

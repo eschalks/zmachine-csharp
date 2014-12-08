@@ -231,6 +231,25 @@ namespace ZMachine
 //            Console.WriteLine();
         }
 
+        public IList<ushort> GetPropertyNumbers()
+        {
+            var numbers = new List<ushort>();
+            var addr = GetPropertiesAddress(true);
+            byte size;
+            do
+            {
+                size = table.Machine.ReadByte(addr++);
+
+                var numBytes = (byte)((size >> 5) + 1);
+                var propId = (ushort)(size & 0x1F);
+
+                numbers.Add(propId);
+                addr += numBytes;
+
+            } while (size != 0);
+            return numbers;
+        }
+
         public override string ToString()
         {
             return string.Format("[{0}] {1}", Id, GetName());
