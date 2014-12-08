@@ -364,15 +364,13 @@ namespace ZMachine
             try
             {
                 var path = Path.Combine(savesDir, fname + ".zsave");
-                var dynamicMemory = new byte[startStatic];
-                Array.Copy(memory, dynamicMemory, startStatic);
 
                 using (var stream = new FileStream(path, FileMode.Create))
                 {
                     using (var writer = new BinaryWriter(stream))
                     {
                         // Write dynamic memory
-                        writer.Write(dynamicMemory);
+                        writer.Write(memory, 0, startStatic);
 
                         // Write program counter
                         writer.Write(ProgramCounter);
@@ -380,6 +378,7 @@ namespace ZMachine
                         // Write stack
                         var stackList = stack.ToList();
                         writer.Write(stackList.Count);
+                        stackList.Reverse();
 
                         foreach (var v in stackList)
                         {
@@ -389,6 +388,7 @@ namespace ZMachine
                         // Write call stack
                         var callList = callStack.ToList();
                         writer.Write(callList.Count);
+                        callList.Reverse();
 
                         foreach (var callFrame in callList)
                         {
