@@ -118,6 +118,25 @@ namespace ZMachine
             var oldParent = obj.GetParent();
             if (oldParent == this) return;
 
+            if (oldParent != null)
+            {
+                var oldSiblings = oldParent.GetChildren();
+                if (oldSiblings[0] == obj)
+                {
+                    oldParent.SetChild(obj.GetSibling());
+                }
+
+
+                // Separate this object from its former siblings
+                foreach (var sibling in oldSiblings)
+                {
+                    if (sibling.GetSibling() == obj)
+                    {
+                        sibling.SetSibling(obj.GetSibling());
+                    }
+                }
+            }
+
             obj.SetParent(this);
             obj.SetSibling(GetChild());
 
@@ -132,11 +151,6 @@ namespace ZMachine
 
         public void SetParent(ZObject obj)
         {
-            var oldParent = GetParent();
-            if (oldParent != null)
-            {
-                oldParent.SetChild(GetSibling());
-            }
 
             var id = obj == null ? 0 : obj.Id;
             table.Machine.WriteByte(address+4, (byte)id);
@@ -162,6 +176,19 @@ namespace ZMachine
         {
             var id = obj == null ? 0 : obj.Id;
             table.Machine.WriteByte(address+6, (byte)id);
+        }
+
+        public IList<ZObject> GetChildren()
+        {
+
+            var children = new List<ZObject>();
+            var child = GetChild();
+            while (child != null)
+            {
+                children.Add(child);
+                child = child.GetSibling();
+            }
+            return children;
         }
 
 
@@ -202,6 +229,11 @@ namespace ZMachine
 //                }
 //            }
 //            Console.WriteLine();
+        }
+
+        public override string ToString()
+        {
+            return string.Format("[{0}] {1}", Id, GetName());
         }
     }
 }
