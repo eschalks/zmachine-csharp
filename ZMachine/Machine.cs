@@ -32,6 +32,8 @@ namespace ZMachine
             " ^0123456789.,!?_#'\"/\\-:()"
         };
 
+        private string savesDir;
+
         private ushort startHighMemory;
         private ushort startDictionary;
         private ushort startObjects;
@@ -53,9 +55,10 @@ namespace ZMachine
         private Action<ushort[]>[] OP2;
         private Action<ushort[]>[] VAR; 
 
-        public Machine(byte[] data)
+        public Machine(byte[] data, string savesDir)
         {
             memory = data;
+            this.savesDir = savesDir;
             ParseHeader();
             DetermineOperations();
             objectTable = new ObjectTable(this, startObjects);
@@ -64,7 +67,7 @@ namespace ZMachine
 
         public static Machine LoadFromFile(string path)
         {
-            return new Machine(File.ReadAllBytes(path));
+            return new Machine(File.ReadAllBytes(path), Path.GetDirectoryName(path));
         }
 
         public void Next()
@@ -162,6 +165,7 @@ namespace ZMachine
 
         private ushort GetDictionaryEntryAddress(string word)
         {
+            word = word.Substring(0, Math.Min(6, word.Length));
             uint pos = startDictionary;
             var n = ReadByte(pos++);
             pos += n;

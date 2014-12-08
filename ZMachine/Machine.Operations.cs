@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace ZMachine
@@ -331,6 +333,153 @@ namespace ZMachine
         {
             Console.Write(ReadString());
             Return(1);
+        }
+
+        [Operation("save", OperationType.Zero, 0x05)]
+        void Save()
+        {
+            Console.Write("File Name: ");
+            var fname = Console.ReadLine();
+            try
+            {
+                var path = Path.Combine(savesDir, fname + ".zsave");
+                var dynamicMemory = new byte[startStatic];
+                Array.Copy(memory, dynamicMemory, startStatic);
+
+                using (var stream = new FileStream(path, FileMode.Create))
+                {
+                    using (var writer = new BinaryWriter(stream))
+                    {
+                        // Write dynamic memory
+                        writer.Write(dynamicMemory);
+
+                        // Write program counter
+                        writer.Write(ProgramCounter);
+
+                        // Write stack
+                        var stackList = stack.ToList();
+                        writer.Write(stackList.Count);
+
+                        foreach (var v in stackList)
+                        {
+                            writer.Write(v);
+                        }
+
+                        // Write call stack
+                        var callList = callStack.ToList();
+                        writer.Write(callList.Count);
+
+                        foreach (var callFrame in callList)
+                        {
+                            writer.Write(callFrame.Start);
+                            writer.Write(callFrame.StackSize);
+                            writer.Write(callFrame.ReturnPosition);
+                            writer.Write(callFrame.ReturnStorage);
+                            writer.Write(callFrame.Locals.Length);
+
+                            foreach (var local in callFrame.Locals)
+                            {
+                                writer.Write(local);
+                            }
+                        }
+                    }
+
+                    Branch(true);
+                }
+            }
+            catch (Exception e)
+            {
+                var c = Console.ForegroundColor;
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine(e.Message);
+                Console.ForegroundColor = c;
+                Branch(false);
+            }
+        }
+
+        [Operation("restore", OperationType.Zero, 0x06)]
+        void Restore()
+        {
+            Console.Write("File Name: ");
+            var fname = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(fname))
+            {
+                Branch(false);
+                return;
+            }
+
+            var path = Path.Combine(savesDir, fname+".zsave");
+            if (!File.Exists(path))
+            {
+                Branch(false);
+                return;
+            }
+
+            using (var stream = new FileStream(path, FileMode.Open))
+            {
+                using (var reader = new BinaryReader(stream))
+                {
+                    // Read header
+                    var header = new byte[32];
+                    if (reader.Read(header, 0, header.Length) != header.Length)
+                    {
+                        Branch(false);
+                        return;
+                    }
+
+                    // Validate checksum
+                    if (memory[0x1C] != header[0x1C] || memory[0x1D] != header[0x1D])
+                    {
+                        Branch(false);
+                        return;
+                    }
+
+
+                    var staticMemoryBase = header[0xE] * (1 << 8) + header[0xF];
+                    stream.Seek(0, SeekOrigin.Begin);
+
+                    // From here on out any error should just be an exception since we're modifying memory now
+                    if (reader.Read(memory, 0, staticMemoryBase) != staticMemoryBase)
+                    {
+                        throw new InvalidDataException("Invalid save file");
+                    }
+
+                    ProgramCounter = reader.ReadUInt32();
+
+                    var stackSize = reader.ReadInt32();
+                    stack.Clear();
+                    for (var i = 0; i < stackSize; i++)
+                    {
+                        stack.Push(reader.ReadUInt16());
+                    }
+
+                    stackSize = reader.ReadInt32();
+                    callStack.Clear();
+                    for (var i = 0; i < stackSize; i++)
+                    {
+                        var callFrame = new CallFrame()
+                        {
+                            Start = reader.ReadUInt32(),
+                            StackSize = reader.ReadInt32(),
+                            ReturnPosition = reader.ReadUInt32(),
+                            ReturnStorage = reader.ReadByte(),
+                            Locals = new ushort[reader.ReadInt32()]
+                        };
+
+                        for (int j = 0; j < callFrame.Locals.Length; j++)
+                        {
+                            callFrame.Locals[j] = reader.ReadUInt16();
+                        }
+
+                        callStack.Push(callFrame);
+                    }
+
+                }
+
+            }
+
+
+            Branch(true);
         }
 
         [Operation("ret_popped", OperationType.Zero, 0x08)]

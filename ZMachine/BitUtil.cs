@@ -37,7 +37,5 @@ namespace ZMachine
             }
             return total;
         }
-
-
     }
 }
