@@ -290,16 +290,13 @@ namespace ZMachine
         [Operation("print_addr", OperationType.One, 0x07)]
         void PrintAddress(ushort addr)
         {
-            Console.Write(ReadString(addr));
+            Write(ReadString(addr));
         }
 
         [Operation("print_obj", OperationType.One, 0x0A)]
         void PrintObject(ushort objId)
         {
-            var c = Console.ForegroundColor;
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.Write(objectTable.GetObject(objId).GetName());
-            Console.ForegroundColor = c;
+            Write(objectTable.GetObject(objId).GetName());
         }
 
         [Operation("ret", OperationType.One, 0x0B)]
@@ -326,8 +323,7 @@ namespace ZMachine
         void PrintPackedAddress(ushort addr)
         {
             var paddr = GetPackedAddress(addr);
-            var c = Console.ForegroundColor;
-            Console.Write(ReadString(paddr));
+            Write(ReadString(paddr));
         }
 
         [Operation("load", OperationType.One, 0x0E)]
@@ -340,7 +336,7 @@ namespace ZMachine
         void Print()
         {
             var str = ReadString();
-            Console.Write(str);
+            Write(str);
         }
 
         [Operation("rtrue", OperationType.Zero, 0x00)]
@@ -358,68 +354,19 @@ namespace ZMachine
         [Operation("print_ret", OperationType.Zero, 0x03)]
         void PrintReturn()
         {
-            Console.WriteLine(ReadString());
+            WriteLine(ReadString());
             Return(1);
         }
 
         [Operation("save", OperationType.Zero, 0x05)]
         void Save()
         {
-            Console.Write("File Name: ");
-            var fname = Console.ReadLine();
-            try
+            if (SaveGame != null)
             {
-                var path = Path.Combine(savesDir, fname + ".zsave");
-
-                using (var stream = new FileStream(path, FileMode.Create))
-                {
-                    using (var writer = new BinaryWriter(stream))
-                    {
-                        // Write dynamic memory
-                        writer.Write(memory, 0, startStatic);
-
-                        // Write program counter
-                        writer.Write(ProgramCounter);
-
-                        // Write stack
-                        var stackList = stack.ToList();
-                        writer.Write(stackList.Count);
-                        stackList.Reverse();
-
-                        foreach (var v in stackList)
-                        {
-                            writer.Write(v);
-                        }
-
-                        // Write call stack
-                        var callList = callStack.ToList();
-                        writer.Write(callList.Count);
-                        callList.Reverse();
-
-                        foreach (var callFrame in callList)
-                        {
-                            writer.Write(callFrame.Start);
-                            writer.Write(callFrame.StackSize);
-                            writer.Write(callFrame.ReturnPosition);
-                            writer.Write(callFrame.ReturnStorage);
-                            writer.Write(callFrame.Locals.Length);
-
-                            foreach (var local in callFrame.Locals)
-                            {
-                                writer.Write(local);
-                            }
-                        }
-                    }
-
-                    Branch(true);
-                }
+                Branch(SaveGame(this));
             }
-            catch (Exception e)
+            else
             {
-                var c = Console.ForegroundColor;
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine(e.Message);
-                Console.ForegroundColor = c;
                 Branch(false);
             }
         }
@@ -427,86 +374,14 @@ namespace ZMachine
         [Operation("restore", OperationType.Zero, 0x06)]
         void Restore()
         {
-            Console.Write("File Name: ");
-            var fname = Console.ReadLine();
-            if (string.IsNullOrWhiteSpace(fname))
+            if (RestoreGame != null)
+            {
+                Branch(RestoreGame(this));
+            }
+            else
             {
                 Branch(false);
-                return;
             }
-
-            var path = Path.Combine(savesDir, fname+".zsave");
-            if (!File.Exists(path))
-            {
-                Branch(false);
-                return;
-            }
-
-            using (var stream = new FileStream(path, FileMode.Open))
-            {
-                using (var reader = new BinaryReader(stream))
-                {
-                    // Read header
-                    var header = new byte[32];
-                    if (reader.Read(header, 0, header.Length) != header.Length)
-                    {
-                        Branch(false);
-                        return;
-                    }
-
-                    // Validate checksum
-                    if (memory[0x1C] != header[0x1C] || memory[0x1D] != header[0x1D])
-                    {
-                        Branch(false);
-                        return;
-                    }
-
-
-                    var staticMemoryBase = header[0xE] * (1 << 8) + header[0xF];
-                    stream.Seek(0, SeekOrigin.Begin);
-
-                    // From here on out any error should just be an exception since we're modifying memory now
-                    if (reader.Read(memory, 0, staticMemoryBase) != staticMemoryBase)
-                    {
-                        throw new InvalidDataException("Invalid save file");
-                    }
-
-                    ProgramCounter = reader.ReadUInt32();
-
-                    var stackSize = reader.ReadInt32();
-                    stack.Clear();
-                    for (var i = 0; i < stackSize; i++)
-                    {
-                        stack.Push(reader.ReadUInt16());
-                    }
-
-                    stackSize = reader.ReadInt32();
-                    callStack.Clear();
-                    for (var i = 0; i < stackSize; i++)
-                    {
-                        var callFrame = new CallFrame()
-                        {
-                            Start = reader.ReadUInt32(),
-                            StackSize = reader.ReadInt32(),
-                            ReturnPosition = reader.ReadUInt32(),
-                            ReturnStorage = reader.ReadByte(),
-                            Locals = new ushort[reader.ReadInt32()]
-                        };
-
-                        for (int j = 0; j < callFrame.Locals.Length; j++)
-                        {
-                            callFrame.Locals[j] = reader.ReadUInt16();
-                        }
-
-                        callStack.Push(callFrame);
-                    }
-
-                }
-
-            }
-
-            Console.Clear();
-            Branch(true);
         }
 
         [Operation("ret_popped", OperationType.Zero, 0x08)]
@@ -525,7 +400,7 @@ namespace ZMachine
         [Operation("new_line", OperationType.Zero, 0x0B)]
         void NewLine()
         {
-            Console.WriteLine();
+            WriteLine("");
         }
 
         [Operation("call", OperationType.Var, 0x00)]
@@ -587,74 +462,33 @@ namespace ZMachine
         }
 
         [Operation("read", OperationType.Var, 0x04)]
-        void Read(ushort[] args)
+        private void Read(ushort[] args)
         {
-            WriteStatusLine();
-            var startColor = Console.ForegroundColor;
-            Console.ForegroundColor = ConsoleColor.DarkGray;
-            var input = Console.ReadLine() ?? "";
-            Console.ForegroundColor = startColor;
-
-
-            uint textBufferAddr = args[0];
-            uint parseBufferAddr = args[1];
-
-            var textBufferSize = ReadByte(textBufferAddr);
-//            if (ReadByte(textBufferAddr + 1) > 0)
-//            {
-//                throw new NotImplementedException("Pre-existing text buffer content");
-//            }
-
-            input = input.Substring(0, Math.Min(input.Length, textBufferSize)).ToLower();
-            var bytes = Encoding.ASCII.GetBytes(input);
-            Array.Copy(bytes, 0, memory,textBufferAddr+1, bytes.Length);
-            WriteByte((uint)(textBufferAddr+2+bytes.Length), 0);
-
-            // TODO: get dictionary word separators; found in dictionary, are included into parse buffer (as opposed to spaces)
-
-            var maxWords = ReadByte(parseBufferAddr);
-            var currentWord = new StringBuilder();
-            byte wordCount = 0;
-            byte wordStart = 0;
-            for (byte i = 0; i < input.Length; i++)
+            if (StatusLine != null)
             {
-                var c = input[i];
-                if (c != ' ')
-                {
-                    if (currentWord.Length == 0)
-                        wordStart = (byte)(i+1);
-                    currentWord.Append(c); 
-                }
-
-                if ((c == ' ' || i == input.Length - 1) && currentWord.Length > 0)
-                {
-                    var addr = GetDictionaryEntryAddress(currentWord.ToString());
-                    var blockStart = (uint)(parseBufferAddr + 2 + wordCount*4);
-                    WriteWord(blockStart, addr);
-                    WriteByte(blockStart+2, (byte)currentWord.Length);
-                    WriteByte(blockStart+3, wordStart);
-
-                    wordCount++;
-                    currentWord.Clear();
-
-                    if (wordCount == maxWords)
-                        break;
-                }
-
+                var obj = objectTable.GetObject(ReadWord(startGlobals));
+                var score = ReadWord((uint) (startGlobals + 2));
+                var moves = ReadWord((uint) (startGlobals + 4));
+                StatusLine(this, obj, (flags1 & 0x02) == 0, score, moves);
             }
-            WriteByte(parseBufferAddr+1, wordCount);
+            if (BeginInput == null)
+            {
+                throw new InvalidOperationException("Trying to accept input without any input event handlers.");
+            }
+                readArgs = args;
+                BeginInput(this);
         }
 
         [Operation("print_char", OperationType.Var, 0x05)]
         void PrintChar(ushort[] args)
         {
-            Console.Write(EncodeChar(args[0]));
+            Write(EncodeChar(args[0]).ToString());
         }
 
         [Operation("print_num", OperationType.Var, 0x06)]
         void PrintNum(ushort[] args)
         {
-            Console.Write((short)args[0]);
+            Write(((short)args[0]).ToString());
         }
 
         [Operation("random", OperationType.Var, 0x07)]

@@ -9,10 +9,22 @@ using System.Threading.Tasks;
 
 namespace ZMachine
 {
-    partial class Machine
+    public partial class Machine
     {
         public byte Version { get; private set; }
         public bool IsDone { get; private set; }
+
+        public delegate void OutputHandler(Machine machine, string text);
+        public delegate void InputHandler(Machine machine);
+        public delegate void StatusLineHandler(Machine machine, ZObject obj, bool isScoreMoves, ushort score, ushort moves);
+        public delegate bool SaveHandler(Machine machine);
+
+
+        public event OutputHandler Output;
+        public event StatusLineHandler StatusLine;
+        public event InputHandler BeginInput;
+        public event SaveHandler SaveGame;
+        public event SaveHandler RestoreGame;
 
         enum OperandType : byte
         {
@@ -33,7 +45,6 @@ namespace ZMachine
             " ^0123456789.,!?_#'\"/\\-:()"
         };
 
-        private string savesDir;
 
         private ushort startHighMemory;
         private ushort startDictionary;
@@ -44,6 +55,7 @@ namespace ZMachine
 
         private Stack<CallFrame> callStack = new Stack<CallFrame>();
         private Stack<ushort> stack = new Stack<ushort>();
+        private ushort[] readArgs;
 
         private ObjectTable objectTable;
         private Random random = new Random();
@@ -56,10 +68,9 @@ namespace ZMachine
         private Action<ushort[]>[] OP2;
         private Action<ushort[]>[] VAR; 
 
-        public Machine(byte[] data, string savesDir)
+        public Machine(byte[] data)
         {
             memory = data;
-            this.savesDir = savesDir;
             ParseHeader();
             DetermineOperations();
             objectTable = new ObjectTable(this, startObjects);
@@ -68,11 +79,15 @@ namespace ZMachine
 
         public static Machine LoadFromFile(string path)
         {
-            return new Machine(File.ReadAllBytes(path), Path.GetDirectoryName(path));
+            return new Machine(File.ReadAllBytes(path));
         }
 
         public void Next()
         {
+            if (readArgs != null)
+            {
+                throw new InvalidOperationException("Read in progress");
+            }
             var pc = ProgramCounter;
             var opcode = ReadByte();
             var form = BitUtil.MultiBitValue(opcode, 6, 2);
@@ -562,55 +577,188 @@ namespace ZMachine
             WriteDebugLine("[{0:X}] {1:X}", pc, num);
         }
 
-        public void WriteStatusLine()
-        {
-            var obj = objectTable.GetObject(ReadWord(startGlobals));
-            var score = ReadWord((uint)(startGlobals + 2));
-            var moves = ReadWord((uint)(startGlobals + 4));
-//            if ((flags1 & 0x02) == 0x02)
-//            {
-//                Console.Title = string.Format("{0} {1}:{2}", obj.GetName(), score, moves);
-//            }
-//            else
-//            {
-//                Console.Title = string.Format("{0} {1}/{2}", obj.GetName(), score, moves);
-//            }
-            var c = Console.ForegroundColor;
-            var b = Console.BackgroundColor;
-            Console.ForegroundColor = ConsoleColor.Black;
-            Console.BackgroundColor = ConsoleColor.DarkGray;
-            var cursorTop = Console.CursorTop;
-            var cursorLeft = Console.CursorLeft;
-            //Console.SetCursorPosition(0, cursorTop-1);
-//            Console.SetCursorPosition(0, Math.Max(0, cursorTop-Console.WindowHeight));
-            Console.SetCursorPosition(0,0);
-            Console.Write(" " + obj.GetName());
-
-            string scoreDisplay;
-            if ((flags1 & 0x02) == 0x02)
-            {
-                scoreDisplay = string.Format("Time: {0}:{1} ", score, moves); 
-            }
-            else
-            {
-                scoreDisplay = string.Format("Score: {0}    Moves: {1} ", score, moves); 
-            }
-
-            for (var i = Console.CursorLeft; i < Console.WindowWidth - scoreDisplay.Length; i++)
-            {
-                Console.Write(' ');
-            }
-            Console.WriteLine(scoreDisplay);
-
-            Console.SetCursorPosition(cursorLeft, cursorTop);
-
-            Console.ForegroundColor = c;
-            Console.BackgroundColor = b;
-        }
 
         public void WriteDebugLine(string format, params object[] arg)
         {
             //Console.WriteLine(format, arg);
+        }
+
+        public void EndInput(string input)
+        {
+            uint textBufferAddr = readArgs[0];
+            uint parseBufferAddr = readArgs[1];
+            readArgs = null;
+
+            var textBufferSize = ReadByte(textBufferAddr);
+//            if (ReadByte(textBufferAddr + 1) > 0)
+//            {
+//                throw new NotImplementedException("Pre-existing text buffer content");
+//            }
+
+            input = input.Substring(0, Math.Min(input.Length, textBufferSize)).ToLower();
+            var bytes = Encoding.ASCII.GetBytes(input);
+            Array.Copy(bytes, 0, memory, textBufferAddr + 1, bytes.Length);
+            WriteByte((uint) (textBufferAddr + 2 + bytes.Length), 0);
+
+            // TODO: get dictionary word separators; found in dictionary, are included into parse buffer (as opposed to spaces)
+
+            var maxWords = ReadByte(parseBufferAddr);
+            var currentWord = new StringBuilder();
+            byte wordCount = 0;
+            byte wordStart = 0;
+            for (byte i = 0; i < input.Length; i++)
+            {
+                var c = input[i];
+                if (c != ' ')
+                {
+                    if (currentWord.Length == 0)
+                        wordStart = (byte) (i + 1);
+                    currentWord.Append(c);
+                }
+
+                if ((c == ' ' || i == input.Length - 1) && currentWord.Length > 0)
+                {
+                    var addr = GetDictionaryEntryAddress(currentWord.ToString());
+                    var blockStart = (uint) (parseBufferAddr + 2 + wordCount*4);
+                    WriteWord(blockStart, addr);
+                    WriteByte(blockStart + 2, (byte) currentWord.Length);
+                    WriteByte(blockStart + 3, wordStart);
+
+                    wordCount++;
+                    currentWord.Clear();
+
+                    if (wordCount == maxWords)
+                        break;
+                }
+
+            }
+            WriteByte(parseBufferAddr + 1, wordCount);
+        }
+
+        void Write(string text)
+        {
+            if (Output != null)
+            {
+                Output(this, text);
+            }
+        }
+
+        void WriteLine(string text)
+        {
+            Write(text+'\n');
+        }
+
+        public bool SaveState(string path)
+        {                          
+            using (var stream = new FileStream(path, FileMode.Create))
+                {
+                    using (var writer = new BinaryWriter(stream))
+                    {
+                        // Write dynamic memory
+                        writer.Write(memory, 0, startStatic);
+
+                        // Write program counter
+                        writer.Write(ProgramCounter);
+
+                        // Write stack
+                        var stackList = stack.ToList();
+                        writer.Write(stackList.Count);
+                        stackList.Reverse();
+
+                        foreach (var v in stackList)
+                        {
+                            writer.Write(v);
+                        }
+
+                        // Write call stack
+                        var callList = callStack.ToList();
+                        writer.Write(callList.Count);
+                        callList.Reverse();
+
+                        foreach (var callFrame in callList)
+                        {
+                            writer.Write(callFrame.Start);
+                            writer.Write(callFrame.StackSize);
+                            writer.Write(callFrame.ReturnPosition);
+                            writer.Write(callFrame.ReturnStorage);
+                            writer.Write(callFrame.Locals.Length);
+
+                            foreach (var local in callFrame.Locals)
+                            {
+                                writer.Write(local);
+                            }
+                        }
+                    }
+
+                    return true;
+                }
+
+        }
+
+        public bool LoadState(string path)
+        {           
+            using (var stream = new FileStream(path, FileMode.Open))
+            {
+                using (var reader = new BinaryReader(stream))
+                {
+                    // Read header
+                    var header = new byte[32];
+                    if (reader.Read(header, 0, header.Length) != header.Length)
+                    {
+                        return false;
+                    }
+
+                    // Validate checksum
+                    if (memory[0x1C] != header[0x1C] || memory[0x1D] != header[0x1D])
+                    {
+                        return false;
+                    }
+
+
+                    var staticMemoryBase = header[0xE] * (1 << 8) + header[0xF];
+                    stream.Seek(0, SeekOrigin.Begin);
+
+                    // From here on out any error should just be an exception since we're modifying memory now
+                    if (reader.Read(memory, 0, staticMemoryBase) != staticMemoryBase)
+                    {
+                        throw new InvalidDataException("Invalid save file");
+                    }
+
+                    ProgramCounter = reader.ReadUInt32();
+
+                    var stackSize = reader.ReadInt32();
+                    stack.Clear();
+                    for (var i = 0; i < stackSize; i++)
+                    {
+                        stack.Push(reader.ReadUInt16());
+                    }
+
+                    stackSize = reader.ReadInt32();
+                    callStack.Clear();
+                    for (var i = 0; i < stackSize; i++)
+                    {
+                        var callFrame = new CallFrame()
+                        {
+                            Start = reader.ReadUInt32(),
+                            StackSize = reader.ReadInt32(),
+                            ReturnPosition = reader.ReadUInt32(),
+                            ReturnStorage = reader.ReadByte(),
+                            Locals = new ushort[reader.ReadInt32()]
+                        };
+
+                        for (int j = 0; j < callFrame.Locals.Length; j++)
+                        {
+                            callFrame.Locals[j] = reader.ReadUInt16();
+                        }
+
+                        callStack.Push(callFrame);
+                    }
+
+                }
+
+            }
+            return true;
+
         }
     }
 }

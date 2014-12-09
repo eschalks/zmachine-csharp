@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace ZMachine
 {
-    class ZObject
+    public class ZObject
     {
         public byte Id { get; private set; }
         private ObjectTable table;

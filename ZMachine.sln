@@ -5,6 +5,8 @@ VisualStudioVersion = 12.0.31101.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZMachine", "ZMachine\ZMachine.csproj", "{AD8D4CF9-EF34-4022-B86F-013BACEE29DA}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZMachine.Console", "ZMachine.Console\ZMachine.Console.csproj", "{97883928-DD5C-419A-A438-D574E43D13AA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{AD8D4CF9-EF34-4022-B86F-013BACEE29DA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AD8D4CF9-EF34-4022-B86F-013BACEE29DA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AD8D4CF9-EF34-4022-B86F-013BACEE29DA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{97883928-DD5C-419A-A438-D574E43D13AA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{97883928-DD5C-419A-A438-D574E43D13AA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{97883928-DD5C-419A-A438-D574E43D13AA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{97883928-DD5C-419A-A438-D574E43D13AA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
