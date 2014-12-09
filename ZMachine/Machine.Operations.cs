@@ -330,6 +330,12 @@ namespace ZMachine
             Console.Write(ReadString(paddr));
         }
 
+        [Operation("load", OperationType.One, 0x0E)]
+        void Load(ushort variable)
+        {
+            Store(ReadVariable((byte)variable));
+        }
+
         [Operation("print", OperationType.Zero, 0x02)]
         void Print()
         {
@@ -499,7 +505,7 @@ namespace ZMachine
 
             }
 
-
+            Console.Clear();
             Branch(true);
         }
 

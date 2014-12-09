@@ -147,6 +147,10 @@ namespace ZMachine
         private void ParseHeader()
         {
             Version = ReadByte(0x00);
+            if (Version != 3)
+            {
+                throw new InvalidOperationException("Only Version 3 files are supported.");
+            }
             flags1 = ReadByte(0x01);
             startHighMemory = ReadWord(0x04);
             ProgramCounter = ReadWord(0x06);
