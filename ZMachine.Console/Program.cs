@@ -39,6 +39,11 @@ namespace ZMachine.Console
             C.Write("File name: ");
             var fname = C.ReadLine();
             var path = Path.Combine(savesDir, fname + ".zsave");
+            if (!File.Exists(path))
+            {
+                C.WriteLine("Save file does not exist.");
+                return false;
+            }
             return machine.LoadState(path);
         }
 
