@@ -69,7 +69,8 @@ namespace ZMachine
         void JumpIfChild(ushort[] args)
         {
             var child = objectTable.GetObject(args[0]);
-            Branch(child.GetParent().Id == args[1]);
+            var parent = child.GetParent();
+            Branch(parent != null && parent.Id == args[1]);
         }
 
         [Operation("test", OperationType.Two, 0x07)]
