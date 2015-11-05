@@ -18,7 +18,6 @@ namespace ZMachine
     partial class Machine
     {
         [Operation("je", OperationType.Two, 0x01)]
-
         void JumpEquals(ushort[] args)
         {
             var a = args[0];
@@ -291,6 +290,13 @@ namespace ZMachine
         void PrintAddress(ushort addr)
         {
             Write(ReadString(addr));
+        }
+
+        [Operation("remove_obj", OperationType.One, 0x09)]
+        void RemoveObject(ushort objId)
+        {
+            var zObject = objectTable.GetObject(objId);
+            zObject.SetParent(null);
         }
 
         [Operation("print_obj", OperationType.One, 0x0A)]
