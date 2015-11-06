@@ -391,6 +391,12 @@ namespace ZMachine
             }
         }
 
+        [Operation("restart", OperationType.Zero, 0x07)]
+        void Restart()
+        {
+            Initialize();
+        }
+
         [Operation("ret_popped", OperationType.Zero, 0x08)]
         void ReturnPopped()
         {

@@ -35,6 +35,7 @@ namespace ZMachine
         }
 
         private byte[] memory;
+        private byte[] initialMemory;
         private byte flags1;
         private ushort flags2;
 
@@ -70,9 +71,15 @@ namespace ZMachine
 
         public Machine(byte[] data)
         {
-            memory = data;
-            ParseHeader();
+            initialMemory = data;
             DetermineOperations();
+            Initialize();
+        }
+
+        private void Initialize()
+        {
+            memory = (byte[])initialMemory.Clone();
+            ParseHeader();
             objectTable = new ObjectTable(this, startObjects);
         }
 
